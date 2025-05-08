@@ -2,7 +2,6 @@
 
 #ifndef _USER_INTERFACE_H_
 #define _USER_INTERFACE_H_
-
 //=====[Declaration of public defines]=========================================
 
 //=====[Declaration of public data types]======================================
@@ -19,7 +18,8 @@ void incorrectCodeStateWrite( bool state );
 
 bool systemBlockedStateRead();
 void systemBlockedStateWrite( bool state );
-
+void userInterfaceDisplayEventStored();
+void eventLogSetSelectedEvent();
 //=====[#include guards - end]=================================================
 
 #endif // _USER_INTERFACE_H_

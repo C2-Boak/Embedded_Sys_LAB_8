@@ -17,6 +17,7 @@
 #include "motion_sensor.h"
 #include "alarm.h"
 #include "sd_card.h"
+#include "matrix_keypad.h"
 
 //=====[Declaration of private defines]========================================
 
@@ -69,8 +70,17 @@ static void commandShowCurrentGateState();
 static void commandMotionSensorActivate();
 static void commandMotionSensorDeactivate();
 static void commandEventLogSaveToSdCard();
+static void commandEventLogReadSdCard();
+void pcSerialComFloatWrite(float number);
+
 
 //=====[Implementations of public functions]===================================
+void pcSerialComFloatWrite(float number)
+{
+    char buffer[32];
+    sprintf(buffer, "%.3f", number);  // Format to 3 decimal places
+    pcSerialComStringWrite(buffer);
+}
 
 void pcSerialComInit()
 {
@@ -105,20 +115,20 @@ void pcSerialComUpdate()
         switch ( pcSerialComMode ) {
             case PC_SERIAL_COMMANDS:
                 pcSerialComCommandUpdate( receivedChar );
-            break;
+                break;
 
             case PC_SERIAL_GET_CODE:
                 pcSerialComGetCodeUpdate( receivedChar );
-            break;
+                break;
 
             case PC_SERIAL_SAVE_NEW_CODE:
                 pcSerialComSaveNewCodeUpdate( receivedChar );
-            break;
+                break;
             default:
                 pcSerialComMode = PC_SERIAL_COMMANDS;
-            break;
+                break;
         }
-    }    
+    }
 }
 
 bool pcSerialComCodeCompleteRead()
@@ -148,11 +158,11 @@ static void pcSerialComGetCodeUpdate( char receivedChar )
     codeSequenceFromPcSerialCom[numberOfCodeChars] = receivedChar;
     pcSerialComStringWrite( "*" );
     numberOfCodeChars++;
-   if ( numberOfCodeChars >= CODE_NUMBER_OF_KEYS ) {
+    if ( numberOfCodeChars >= CODE_NUMBER_OF_KEYS ) {
         pcSerialComMode = PC_SERIAL_COMMANDS;
         codeComplete = true;
         numberOfCodeChars = 0;
-    } 
+    }
 }
 
 static void pcSerialComSaveNewCodeUpdate( char receivedChar )
@@ -167,7 +177,7 @@ static void pcSerialComSaveNewCodeUpdate( char receivedChar )
         numberOfCodeChars = 0;
         codeWrite( newCodeSequence );
         pcSerialComStringWrite( "\r\nNew code configured\r\n\r\n" );
-    } 
+    }
 }
 
 static void pcSerialComCommandUpdate( char receivedChar )
@@ -188,8 +198,12 @@ static void pcSerialComCommandUpdate( char receivedChar )
         case 'i': case 'I': commandMotionSensorActivate(); break;
         case 'h': case 'H': commandMotionSensorDeactivate(); break;
         case 'w': case 'W': commandEventLogSaveToSdCard(); break;
+        case 'r': case 'R': commandEventLogReadSdCard(); break;
+
+
+
         default: availableCommands(); break;
-    } 
+    }
 }
 
 static void availableCommands()
@@ -206,10 +220,11 @@ static void availableCommands()
     pcSerialComStringWrite( "Press 't' or 'T' to get the date and time\r\n" );
     pcSerialComStringWrite( "Press 'e' or 'E' to get the stored events\r\n" );
     pcSerialComStringWrite( "Press 'm' or 'M' to show the motor status\r\n" );
-    pcSerialComStringWrite( "Press 'g' or 'G' to show the gate status\r\n" );    
+    pcSerialComStringWrite( "Press 'g' or 'G' to show the gate status\r\n" );
     pcSerialComStringWrite( "Press 'i' or 'I' to activate the motion sensor\r\n" );
     pcSerialComStringWrite( "Press 'h' or 'H' to deactivate the motion sensor\r\n" );
     pcSerialComStringWrite( "Press 'w' or 'W' to store the events log in the SD card\r\n" );
+    pcSerialComStringWrite( "Press 'r' or 'R' to read the events log in the SD card\r\n" );
     pcSerialComStringWrite( "\r\n" );
 }
 
@@ -228,8 +243,9 @@ static void commandShowCurrentGasDetectorState()
         pcSerialComStringWrite( "Gas is being detected\r\n");
     } else {
         pcSerialComStringWrite( "Gas is not being detected\r\n");
-    }    
+    }
 }
+
 
 static void commandShowCurrentOverTemperatureDetectorState()
 {
@@ -266,23 +282,70 @@ static void commandShowCurrentTemperatureInCelsius()
 {
     char str[100] = "";
     sprintf ( str, "Temperature: %.2f \xB0 C\r\n",
-                    temperatureSensorReadCelsius() );
-    pcSerialComStringWrite( str );  
+              temperatureSensorReadCelsius() );
+    pcSerialComStringWrite( str );
 }
 
 static void commandShowCurrentTemperatureInFahrenheit()
 {
     char str[100] = "";
     sprintf ( str, "Temperature: %.2f \xB0 C\r\n",
-                    temperatureSensorReadFahrenheit() );
-    pcSerialComStringWrite( str );  
+              temperatureSensorReadFahrenheit() );
+    pcSerialComStringWrite( str );
 }
 
 static void commandEventLogSaveToSdCard()
 {
-    eventLogSaveToSdCard();
-}
+    char eventSelection;
 
+    // Display the selection menu once
+    pcSerialComStringWrite("\r\nPlease select an alarm event type to store:\r\n");
+    pcSerialComStringWrite("Press '6' for ALARM event\r\n");
+    pcSerialComStringWrite("Press '7' for GAS_DET event\r\n");
+    pcSerialComStringWrite("Press '8' for OVER_TEMP event\r\n");
+    pcSerialComStringWrite("Press '9' for MOTION event\r\n");
+
+
+    // Wait for a valid event selection
+    while (true) {
+        eventSelection = matrixKeypadUpdate();  // Wait for user input
+
+        if (eventSelection == '6') {
+            eventLogWrite(true, "ALARM");
+            pcSerialComStringWrite("ALARM event has been saved to the SD card.\r\n");
+            eventLogSaveToSdCard();
+            break;
+        }
+        else if (eventSelection == '7') {
+            eventLogWrite(true, "GAS_DET");
+            pcSerialComStringWrite("GAS_DET event has been saved to the SD card.\r\n");
+            eventLogSaveToSdCard();
+            break;
+        }
+        else if (eventSelection == '8') {
+            eventLogWrite(true, "OVER_TEMP");
+            pcSerialComStringWrite("OVER_TEMP event has been saved to the SD card.\r\n");
+            eventLogSaveToSdCard();
+            break;
+        }
+        else if (eventSelection == '9') {
+            eventLogWrite(true, "MOTION");
+            pcSerialComStringWrite("MOTION event has been saved to the SD card.\r\n");
+            eventLogSaveToSdCard();
+            break;
+        }
+        else if (eventSelection == '0') {
+            eventLogWrite(true, "Events");
+            pcSerialComStringWrite("File from SD to the SD card.\r\n");
+            eventLogSaveToSdCard();
+            break;
+
+        }
+    }
+}
+static void commandEventLogReadSdCard(){
+    eventLogReadFileFromSdCard();
+}
 static void commandSetDateAndTime()
 {
     char year[5] = "";
@@ -291,7 +354,7 @@ static void commandSetDateAndTime()
     char hour[3] = "";
     char minute[3] = "";
     char second[3] = "";
-    
+
     pcSerialComStringWrite("\r\nType four digits for the current year (YYYY): ");
     pcSerialComStringRead( year, 4);
     pcSerialComStringWrite("\r\n");
@@ -315,11 +378,11 @@ static void commandSetDateAndTime()
     pcSerialComStringWrite("Type two digits for the current seconds (00-59): ");
     pcSerialComStringRead( second, 2);
     pcSerialComStringWrite("\r\n");
-    
+
     pcSerialComStringWrite("Date and time has been set\r\n");
 
-    dateAndTimeWrite( atoi(year), atoi(month), atoi(day), 
-        atoi(hour), atoi(minute), atoi(second) );
+    dateAndTimeWrite( atoi(year), atoi(month), atoi(day),
+                      atoi(hour), atoi(minute), atoi(second) );
 }
 
 static void commandShowDateAndTime()
@@ -336,19 +399,19 @@ static void commandShowStoredEvents()
     int i;
     for (i = 0; i < eventLogNumberOfStoredEvents(); i++) {
         eventLogRead( i, str );
-        pcSerialComStringWrite( str );   
-        pcSerialComStringWrite( "\r\n" );                    
+        pcSerialComStringWrite( str );
+        pcSerialComStringWrite( "\r\n" );
     }
 }
 
 static void commandShowCurrentMotorState()
 {
     switch ( motorDirectionRead() ) {
-        case STOPPED: 
+        case STOPPED:
             pcSerialComStringWrite( "The motor is stopped\r\n"); break;
-        case DIRECTION_1: 
+        case DIRECTION_1:
             pcSerialComStringWrite( "The motor is turning in direction 1\r\n"); break;
-        case DIRECTION_2: 
+        case DIRECTION_2:
             pcSerialComStringWrite( "The motor is turning in direction 2\r\n"); break;
     }
 }

@@ -2,16 +2,19 @@
 
 #ifndef _GAS_SENSOR_H_
 #define _GAS_SENSOR_H_
+#include "mbed.h"
 
 //=====[Declaration of public defines]=========================================
 
 //=====[Declaration of public data types]======================================
 
-//=====[Declarations (prototypes) of public functions]=========================
+#include "fire_alarm.h"
+#include "temperature_sensor.h"
 
-void gasSensorInit();
-void gasSensorUpdate();
-bool gasSensorRead();
+float GasSen0127V();
+float GasSenRead();
+bool gasDetectedRead();
+void gasSensorReset();
 
 //=====[#include guards - end]=================================================
 

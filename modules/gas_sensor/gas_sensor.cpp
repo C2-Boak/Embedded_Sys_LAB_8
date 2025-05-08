@@ -1,39 +1,46 @@
 //=====[Libraries]=============================================================
 
+#include "fire_alarm.h"
 #include "mbed.h"
-
 #include "gas_sensor.h"
 
-//=====[Declaration of private defines]========================================
 
-//=====[Declaration of private data types]=====================================
+#define Dangerous_Gas_Level                    3000
 
-//=====[Declaration and initialization of public global objects]===============
 
-DigitalIn mq2(PE_12);
+AnalogIn GasSen0127(A2);
 
-//=====[Declaration of external public global variables]=======================
 
-//=====[Declaration and initialization of public global variables]=============
+float Gas_Level            = 0.0;
 
-//=====[Declaration and initialization of private global variables]============
 
-//=====[Declarations (prototypes) of private functions]========================
 
-//=====[Implementations of public functions]===================================
-
-void gasSensorInit()
+float GasSen0127V(float analogRead)
 {
+    if (analogRead > 0.3){
+        return (analogRead*4800);
+    }else{
+        return 0.00;
+    }
+
 }
 
-void gasSensorUpdate()
-{
+float GasSenRead (){
+    Gas_Level = GasSen0127V(GasSen0127);
+
+    return Gas_Level;
+
 }
 
-bool gasSensorRead()
-{
-    return mq2;
+bool gasDetectedRead(){
+    if (Gas_Level > Dangerous_Gas_Level) {
+        return 1;
+    }else{
+        return 0;
+    }
 }
 
-//=====[Implementations of private functions]==================================
-
+void gasSensorReset()
+{
+    Gas_Level = 0.0;
+}

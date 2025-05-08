@@ -16,6 +16,7 @@ void pcSerialComIntWrite( int number );
 void pcSerialComUpdate();
 bool pcSerialComCodeCompleteRead();
 void pcSerialComCodeCompleteWrite( bool state );
+void pcSerialComFloatWrite(float number);
 
 //=====[#include guards - end]=================================================
 

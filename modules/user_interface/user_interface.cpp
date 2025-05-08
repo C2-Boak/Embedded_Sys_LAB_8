@@ -16,17 +16,14 @@
 #include "motion_sensor.h"
 #include "matrix_keypad.h"
 #include "display.h"
-#include "GLCD_fire_alarm.h"
-#include "GLCD_intruder_alarm.h"
 #include "motor.h"
 #include "gate.h"
-#include "light_system.h"
 #include "light_level_control.h"
 
 //=====[Declaration of private defines]========================================
 
-#define DISPLAY_REFRESH_TIME_REPORT_MS 1000
-#define DISPLAY_REFRESH_TIME_ALARM_MS 300
+#define DISPLAY_REFRESH_TIME_REPORT_MS 3000
+#define DISPLAY_REFRESH_TIME_ALARM_MS 1000
 
 //=====[Declaration of private data types]=====================================
 
@@ -43,8 +40,6 @@ InterruptIn gateCloseButton(PF_8);
 DigitalOut incorrectCodeLed(LED3);
 DigitalOut systemBlockedLed(LED2);
 
-//=====[Declaration of external public global variables]=======================
-
 //=====[Declaration and initialization of public global variables]=============
 
 char codeSequenceFromUserInterface[CODE_NUMBER_OF_KEYS];
@@ -52,8 +47,6 @@ char codeSequenceFromUserInterface[CODE_NUMBER_OF_KEYS];
 //=====[Declaration and initialization of private global variables]============
 
 static displayState_t displayState = DISPLAY_REPORT_STATE;
-static int displayFireAlarmGraphicSequence = 0;
-static int displayIntruderAlarmGraphicSequence = 0;
 static int displayRefreshTimeMs = DISPLAY_REFRESH_TIME_REPORT_MS;
 
 static bool incorrectCodeState = OFF;
@@ -74,6 +67,7 @@ static void userInterfaceDisplayReportStateInit();
 static void userInterfaceDisplayReportStateUpdate();
 static void userInterfaceDisplayAlarmStateInit();
 static void userInterfaceDisplayAlarmStateUpdate();
+void userInterfaceDisplayEventStored();
 
 static void gateOpenButtonCallback();
 static void gateCloseButtonCallback();
@@ -87,12 +81,12 @@ void userInterfaceInit()
 
     gateOpenButton.fall(&gateOpenButtonCallback);
     gateCloseButton.fall(&gateCloseButtonCallback);
-    
+
     incorrectCodeLed = OFF;
     systemBlockedLed = OFF;
-    matrixKeypadInit( SYSTEM_TIME_INCREMENT_MS );
+    matrixKeypadInit(SYSTEM_TIME_INCREMENT_MS);
     userInterfaceDisplayInit();
-    
+
     lightLevelControlInit();
 }
 
@@ -110,7 +104,7 @@ bool incorrectCodeStateRead()
     return incorrectCodeState;
 }
 
-void incorrectCodeStateWrite( bool state )
+void incorrectCodeStateWrite(bool state)
 {
     incorrectCodeState = state;
 }
@@ -120,7 +114,7 @@ bool systemBlockedStateRead()
     return systemBlockedState;
 }
 
-void systemBlockedStateWrite( bool state )
+void systemBlockedStateWrite(bool state)
 {
     systemBlockedState = state;
 }
@@ -130,7 +124,7 @@ bool userInterfaceCodeCompleteRead()
     return codeComplete;
 }
 
-void userInterfaceCodeCompleteWrite( bool state )
+void userInterfaceCodeCompleteWrite(bool state)
 {
     codeComplete = state;
 }
@@ -142,20 +136,20 @@ static void userInterfaceMatrixKeypadUpdate()
     static int numberOfHashKeyReleased = 0;
     char keyReleased = matrixKeypadUpdate();
 
-    if( keyReleased != '\0' ) {
+    if (keyReleased != '\0') {
 
-        if( alarmStateRead() && !systemBlockedStateRead() ) {
-            if( !incorrectCodeStateRead() ) {
+        if (alarmStateRead() && !systemBlockedStateRead()) {
+            if (!incorrectCodeStateRead()) {
                 codeSequenceFromUserInterface[numberOfCodeChars] = keyReleased;
                 numberOfCodeChars++;
-                if ( numberOfCodeChars >= CODE_NUMBER_OF_KEYS ) {
+                if (numberOfCodeChars >= CODE_NUMBER_OF_KEYS) {
                     codeComplete = true;
                     numberOfCodeChars = 0;
                 }
             } else {
-                if( keyReleased == '#' ) {
+                if (keyReleased == '#') {
                     numberOfHashKeyReleased++;
-                    if( numberOfHashKeyReleased >= 2 ) {
+                    if (numberOfHashKeyReleased >= 2) {
                         numberOfHashKeyReleased = 0;
                         numberOfCodeChars = 0;
                         codeComplete = false;
@@ -163,30 +157,12 @@ static void userInterfaceMatrixKeypadUpdate()
                     }
                 }
             }
-        } else if ( !systemBlockedStateRead() ) {
-            if( keyReleased == 'A' ) {
+        } else if (!systemBlockedStateRead()) {
+            if (keyReleased == 'A') {
                 motionSensorActivate();
             }
-            if( keyReleased == 'B' ) {
+            if (keyReleased == 'B') {
                 motionSensorDeactivate();
-            }
-            if( keyReleased == '1' ) {
-                lightSystemBrightnessChangeRGBFactor( RGB_LED_RED, true );
-            }
-            if( keyReleased == '2' ) {
-                lightSystemBrightnessChangeRGBFactor( RGB_LED_GREEN, true );
-            }
-            if( keyReleased == '3' ) {
-                lightSystemBrightnessChangeRGBFactor( RGB_LED_BLUE, true );
-            }
-            if( keyReleased == '4' ) {
-                lightSystemBrightnessChangeRGBFactor( RGB_LED_RED, false );
-            }
-            if( keyReleased == '5' ) {
-                lightSystemBrightnessChangeRGBFactor( RGB_LED_GREEN, false );
-            }
-            if( keyReleased == '6' ) {
-                lightSystemBrightnessChangeRGBFactor( RGB_LED_BLUE, false );
             }
         }
     }
@@ -197,39 +173,37 @@ static void userInterfaceDisplayReportStateInit()
     displayState = DISPLAY_REPORT_STATE;
     displayRefreshTimeMs = DISPLAY_REFRESH_TIME_REPORT_MS;
 
-    displayModeWrite( DISPLAY_MODE_CHAR );
-
     displayClear();
 
-    displayCharPositionWrite ( 0,0 );
-    displayStringWrite( "Temperature:" );
+    displayCharPositionWrite(0, 0);
+    displayStringWrite("Temperature:");
 
-    displayCharPositionWrite ( 0,1 );
-    displayStringWrite( "Gas:" );
+    displayCharPositionWrite(0, 1);
+    displayStringWrite("Gas:");
 
-    displayCharPositionWrite ( 0,2 );
-    displayStringWrite( "Alarm:" );
+    displayCharPositionWrite(0, 2);
+    displayStringWrite("Alarm:");
 }
 
 static void userInterfaceDisplayReportStateUpdate()
 {
     char temperatureString[3] = "";
+    char gasString[4] = "";
 
     sprintf(temperatureString, "%.0f", temperatureSensorReadCelsius());
-    displayCharPositionWrite ( 12,0 );
-    displayStringWrite( temperatureString );
-    displayCharPositionWrite ( 14,0 );
-    displayStringWrite( "'C" );
+    displayCharPositionWrite(12, 0);
+    displayStringWrite(temperatureString);
+    displayCharPositionWrite(14, 0);
+    displayStringWrite("'C");
 
-    displayCharPositionWrite ( 4,1 );
+    sprintf(gasString, "%.0f", GasSenRead());
+    displayCharPositionWrite(4, 1);
+    displayStringWrite(gasString);
+    displayCharPositionWrite(8, 1);
+    displayStringWrite("PPM");
 
-    if ( gasDetectorStateRead() ) {
-        displayStringWrite( "Detected    " );
-    } else {
-        displayStringWrite( "Not Detected" );
-    }
-    displayCharPositionWrite ( 6,2 );
-    displayStringWrite( "OFF" );
+    displayCharPositionWrite(6, 2);
+    displayStringWrite("OFF");
 }
 
 static void userInterfaceDisplayAlarmStateInit()
@@ -238,55 +212,38 @@ static void userInterfaceDisplayAlarmStateInit()
     displayRefreshTimeMs = DISPLAY_REFRESH_TIME_ALARM_MS;
 
     displayClear();
-
-    displayModeWrite( DISPLAY_MODE_GRAPHIC );
-
-    displayFireAlarmGraphicSequence = 0;
+    userInterfaceDisplayAlarmStateUpdate();
 }
 
 static void userInterfaceDisplayAlarmStateUpdate()
 {
-    if ( ( gasDetectedRead() ) || ( overTemperatureDetectedRead() ) ) {
-        switch( displayFireAlarmGraphicSequence ) {
-        case 0:
-            displayBitmapWrite( GLCD_fire_alarm[0] );
-            displayFireAlarmGraphicSequence++;
-            break;
-        case 1:
-            displayBitmapWrite( GLCD_fire_alarm[1] );
-            displayFireAlarmGraphicSequence++;
-            break;
-        case 2:
-            displayBitmapWrite( GLCD_fire_alarm[2] );
-            displayFireAlarmGraphicSequence++;
-            break;
-        case 3:
-            displayBitmapWrite( GLCD_fire_alarm[3] );
-            displayFireAlarmGraphicSequence = 0;
-            break;
-        default:
-            displayBitmapWrite( GLCD_ClearScreen );
-            displayFireAlarmGraphicSequence = 0;
-            break;
+    displayClear();
+
+    if (gasDetectedRead() || overTemperatureDetectedRead()) {
+        displayCharPositionWrite(0, 0);
+        displayStringWrite("FIRE ALARM!");
+        displayCharPositionWrite(0, 1);
+        if (gasDetectedRead()) {
+            displayStringWrite("Gas detected!");
+        } else {
+            displayStringWrite("Overtemp!");
         }
-    } else if ( intruderDetectedRead() ) {
-        switch( displayIntruderAlarmGraphicSequence ) {
-        case 0:
-            displayBitmapWrite( GLCD_intruder_alarm );
-            displayIntruderAlarmGraphicSequence++;
-            break;
-        case 1:
-        default:
-            displayBitmapWrite( GLCD_ClearScreen );
-            displayIntruderAlarmGraphicSequence = 0;
-            break;
-        }
+    } else if (intruderDetectedRead()) {
+        displayCharPositionWrite(0, 0);
+        displayStringWrite("INTRUDER ALERT!");
+        displayCharPositionWrite(0, 1);
+        displayStringWrite("Motion detected!");
+    } else {
+        displayCharPositionWrite(0, 0);
+        displayStringWrite("ALARM ACTIVE");
+        displayCharPositionWrite(0, 1);
+        displayStringWrite("Check system.");
     }
 }
 
 static void userInterfaceDisplayInit()
 {
-    displayInit( DISPLAY_TYPE_GLCD_ST7920, DISPLAY_CONNECTION_SPI );
+    displayInit(DISPLAY_TYPE_LCD_HD44780, DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER);
     userInterfaceDisplayReportStateInit();
 }
 
@@ -294,36 +251,33 @@ static void userInterfaceDisplayUpdate()
 {
     static int accumulatedDisplayTime = 0;
 
-    if( accumulatedDisplayTime >=
-        displayRefreshTimeMs ) {
-
+    if (accumulatedDisplayTime >= displayRefreshTimeMs) {
         accumulatedDisplayTime = 0;
 
-        switch ( displayState ) {
-        case DISPLAY_REPORT_STATE:
-            userInterfaceDisplayReportStateUpdate();
+        switch (displayState) {
+            case DISPLAY_REPORT_STATE:
+                userInterfaceDisplayReportStateUpdate();
 
-            if ( alarmStateRead() ) {
-                userInterfaceDisplayAlarmStateInit();
-            }
-            break;
+                if (alarmStateRead()) {
+                    userInterfaceDisplayAlarmStateInit();
+                }
+                break;
 
-        case DISPLAY_ALARM_STATE:
-            userInterfaceDisplayAlarmStateUpdate();
+            case DISPLAY_ALARM_STATE:
+                userInterfaceDisplayAlarmStateUpdate();
 
-            if ( !alarmStateRead() ) {
+                if (!alarmStateRead()) {
+                    userInterfaceDisplayReportStateInit();
+                }
+                break;
+
+            default:
                 userInterfaceDisplayReportStateInit();
-            }
-            break;
-
-        default:
-            userInterfaceDisplayReportStateInit();
-            break;
+                break;
         }
 
     } else {
-        accumulatedDisplayTime =
-            accumulatedDisplayTime + SYSTEM_TIME_INCREMENT_MS;
+        accumulatedDisplayTime += SYSTEM_TIME_INCREMENT_MS;
     }
 }
 
@@ -345,4 +299,15 @@ static void gateOpenButtonCallback()
 static void gateCloseButtonCallback()
 {
     gateClose();
+}
+void userInterfaceDisplayEventStored()
+{
+    displayClear();
+    displayCharPositionWrite(0, 0);
+    displayStringWrite("Events Stored");
+    displayCharPositionWrite(0, 1);
+    displayStringWrite("to SD Card");
+
+    delay(4000);
+    userInterfaceDisplayInit();
 }
